@@ -9,11 +9,19 @@ const TOOLS = [
 ];
 
 export default function Toolbar() {
-  const tool     = useStore(s => s.tool);
-  const setTool  = useStore(s => s.setTool);
-  const view     = useStore(s => s.view);
-  const setView  = useStore(s => s.setView);
-  const clearAll = useStore(s => s.clearAll);
+  const tool       = useStore(s => s.tool);
+  const setTool    = useStore(s => s.setTool);
+  const view       = useStore(s => s.view);
+  const setView    = useStore(s => s.setView);
+  const clearAll   = useStore(s => s.clearAll);
+  const undo       = useStore(s => s.undo);
+  const redo       = useStore(s => s.redo);
+  const copyEl     = useStore(s => s.copyEl);
+  const pasteEl    = useStore(s => s.pasteEl);
+  const historyIdx = useStore(s => s.historyIdx);
+  const historyLen = useStore(s => s.history.length);
+  const clipboard  = useStore(s => s.clipboard);
+  const selId      = useStore(s => s.selId);
 
   const exportSVG = () => {
     const svg = document.querySelector('svg');
@@ -37,6 +45,32 @@ export default function Toolbar() {
             <span className="tb-label">{t.label}</span>
           </button>
         ))}
+      </div>
+
+      <div className="tb-sep"/>
+
+      {/* Undo / Redo / Copy / Paste */}
+      <div className="tb-group">
+        <button className="tb-btn" title="Undo (Ctrl+Z)"
+          disabled={historyIdx <= 0} onClick={undo}>
+          <span className="tb-icon">↩</span>
+          <span className="tb-label">Undo</span>
+        </button>
+        <button className="tb-btn" title="Redo (Ctrl+Shift+Z)"
+          disabled={historyIdx >= historyLen - 1} onClick={redo}>
+          <span className="tb-icon">↪</span>
+          <span className="tb-label">Redo</span>
+        </button>
+        <button className="tb-btn" title="Copy (Ctrl+C)"
+          disabled={!selId} onClick={copyEl}>
+          <span className="tb-icon">⧉</span>
+          <span className="tb-label">Copy</span>
+        </button>
+        <button className="tb-btn" title="Paste (Ctrl+V)"
+          disabled={!clipboard} onClick={pasteEl}>
+          <span className="tb-icon">⊕</span>
+          <span className="tb-label">Paste</span>
+        </button>
       </div>
 
       <div className="tb-sep"/>

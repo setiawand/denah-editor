@@ -40,8 +40,10 @@ export default function Editor2D() {
   /* ─── Keyboard handlers ─────────────────────────────────── */
   useEffect(() => {
     const onKey = e => {
-      if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
       const s = useStore.getState();
+      const meta = e.ctrlKey || e.metaKey;
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && s.selId) {
         e.preventDefault(); s.delSel();
       }
@@ -50,6 +52,10 @@ export default function Editor2D() {
         intRef.current = { type: 'idle' };
         previewRef.current = null; setPreview(null);
       }
+      if (meta && e.key === 'z' && !e.shiftKey) { e.preventDefault(); s.undo(); }
+      if (meta && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); s.redo(); }
+      if (meta && e.key === 'c') { e.preventDefault(); s.copyEl(); }
+      if (meta && e.key === 'v') { e.preventDefault(); s.pasteEl(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

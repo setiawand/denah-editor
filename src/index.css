@@ -177,6 +177,8 @@ body { background: var(--bg); color: var(--text); }
 }
 .tb-btn.danger { color:#FCA5A5; }
 .tb-btn.danger:hover { background:rgba(239,68,68,.1); }
+.tb-btn:disabled { opacity:0.35; cursor:not-allowed; }
+.tb-btn:disabled:hover { background:transparent; color:var(--muted); }
 .tb-icon  { font-size:14px; line-height:1; }
 .tb-label { font-size:12px; }
 

@@ -1,12 +1,12 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore as useZustandStore } from 'zustand';
 
-export const GRID = 40;       // pixels per meter
-export const SNAP = 20;       // snap every 0.5m
-export const MIN_ROOM = 40;   // 1m minimum room size
-export const DOOR_W = 40;     // 1m door width
-export const WIN_W = 60;      // 1.5m window width
-export const WALL_H = 2.8;    // wall height in meters (3D)
+export const GRID = 40;
+export const SNAP = 20;
+export const MIN_ROOM = 40;
+export const DOOR_W = 40;
+export const WIN_W = 60;
+export const WALL_H = 2.8;
 
 export const ROOM_TYPES = [
   { id:'living',   name:'Ruang Tamu',   c2d:'#DBEAFE', b2d:'#2563EB', c3d:0x93C5FD },
@@ -39,13 +39,17 @@ const SAMPLE_DOORS = [
 ];
 
 export const store = createStore((set, get) => ({
-  tool:     'select',
-  roomType: 'living',
-  view:     '2d',
-  selId:    null,
-  rooms:    SAMPLE_ROOMS,
-  doors:    SAMPLE_DOORS,
-  wins:     [],
+  tool:       'select',
+  roomType:   'living',
+  view:       '2d',
+  selId:      null,
+  rooms:      SAMPLE_ROOMS,
+  doors:      SAMPLE_DOORS,
+  wins:       [],
+
+  history:    [],
+  historyIdx: -1,
+  clipboard:  null,
 
   setTool:     t  => set({ tool: t }),
   setRoomType: rt => set({ roomType: rt }),
@@ -54,27 +58,95 @@ export const store = createStore((set, get) => ({
 
   snapVal: v => Math.round(v / SNAP) * SNAP,
 
+  pushHistory: () => set(s => {
+    const snap = { rooms: s.rooms, doors: s.doors, wins: s.wins };
+    const base = s.history.slice(0, s.historyIdx + 1);
+    const next = [...base, snap].slice(-20);
+    return { history: next, historyIdx: next.length - 1 };
+  }),
+
+  undo: () => set(s => {
+    if (s.historyIdx <= 0) return {};
+    const idx = s.historyIdx - 1;
+    return { ...s.history[idx], historyIdx: idx, selId: null };
+  }),
+
+  redo: () => set(s => {
+    if (s.historyIdx >= s.history.length - 1) return {};
+    const idx = s.historyIdx + 1;
+    return { ...s.history[idx], historyIdx: idx, selId: null };
+  }),
+
+  copyEl: () => {
+    const { selId, rooms, doors, wins } = get();
+    if (!selId) return;
+    const room = rooms.find(r => r.id === selId);
+    const door = doors.find(d => d.id === selId);
+    const win  = wins.find(w => w.id === selId);
+    const el = room || door || win;
+    if (!el) return;
+    const type = room ? 'room' : door ? 'door' : 'win';
+    set({ clipboard: { type, el: { ...el } } });
+  },
+
+  pasteEl: () => {
+    const { clipboard, addRoom, addDoor, addWin } = get();
+    if (!clipboard) return;
+    const el = { ...clipboard.el, x: clipboard.el.x + 40, y: clipboard.el.y + 40 };
+    delete el.id;
+    if (clipboard.type === 'room') addRoom(el);
+    else if (clipboard.type === 'door') addDoor(el);
+    else addWin(el);
+  },
+
   // Rooms
-  addRoom: r => { const id = uid('room'); set(s => ({ rooms:[...s.rooms,{...r,id}], selId:id })); },
-  updRoom: (id,u) => set(s => ({ rooms: s.rooms.map(r => r.id===id ? {...r,...u} : r) })),
+  addRoom: r => {
+    get().pushHistory();
+    const id = uid('room');
+    set(s => ({ rooms: [...s.rooms, { ...r, id }], selId: id }));
+  },
+  updRoom: (id, u) => {
+    get().pushHistory();
+    set(s => ({ rooms: s.rooms.map(r => r.id === id ? { ...r, ...u } : r) }));
+  },
 
   // Doors
-  addDoor: d => { const id = uid('door'); set(s => ({ doors:[...s.doors,{...d,id}], selId:id })); },
-  updDoor: (id,u) => set(s => ({ doors: s.doors.map(d => d.id===id ? {...d,...u} : d) })),
+  addDoor: d => {
+    get().pushHistory();
+    const id = uid('door');
+    set(s => ({ doors: [...s.doors, { ...d, id }], selId: id }));
+  },
+  updDoor: (id, u) => {
+    get().pushHistory();
+    set(s => ({ doors: s.doors.map(d => d.id === id ? { ...d, ...u } : d) }));
+  },
 
   // Windows
-  addWin: w => { const id = uid('win'); set(s => ({ wins:[...s.wins,{...w,id}], selId:id })); },
-  updWin: (id,u) => set(s => ({ wins: s.wins.map(w => w.id===id ? {...w,...u} : w) })),
+  addWin: w => {
+    get().pushHistory();
+    const id = uid('win');
+    set(s => ({ wins: [...s.wins, { ...w, id }], selId: id }));
+  },
+  updWin: (id, u) => {
+    get().pushHistory();
+    set(s => ({ wins: s.wins.map(w => w.id === id ? { ...w, ...u } : w) }));
+  },
 
   // Delete
-  delById: id => set(s => ({
-    rooms: s.rooms.filter(r => r.id!==id),
-    doors: s.doors.filter(d => d.id!==id),
-    wins:  s.wins.filter(w => w.id!==id),
-    selId: s.selId===id ? null : s.selId,
-  })),
-  delSel: () => { const {selId,delById}=get(); if(selId) delById(selId); },
-  clearAll: () => set({ rooms:[], doors:[], wins:[], selId:null }),
+  delById: id => {
+    get().pushHistory();
+    set(s => ({
+      rooms: s.rooms.filter(r => r.id !== id),
+      doors: s.doors.filter(d => d.id !== id),
+      wins:  s.wins.filter(w => w.id !== id),
+      selId: s.selId === id ? null : s.selId,
+    }));
+  },
+  delSel: () => { const { selId, delById } = get(); if (selId) delById(selId); },
+  clearAll: () => {
+    get().pushHistory();
+    set({ rooms: [], doors: [], wins: [], selId: null });
+  },
 }));
 
 export const useStore = (selector) => useZustandStore(store, selector);
