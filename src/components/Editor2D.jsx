@@ -183,6 +183,9 @@ export default function Editor2D() {
         s.addRoom({ name, type: s.roomType, ...p });
       }
       previewRef.current = null; setPreview(null);
+    } else if (['moving', 'moving-door', 'moving-win', 'resizing'].includes(it.type)) {
+      // Push history once after drag/resize ends (not on every mousemove)
+      useStore.getState().pushHistoryNow();
     }
     intRef.current = { type:'idle' };
   }, []);

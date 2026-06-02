@@ -38,6 +38,17 @@ const SAMPLE_DOORS = [
   { id:'d3', x:120, y:420, rotation:270 },
 ];
 
+// History stores state AFTER each action. Index points to current state.
+const initialSnap = { rooms: SAMPLE_ROOMS, doors: SAMPLE_DOORS, wins: [] };
+
+// Push new snapshot after a mutation. Runs inside set() so receives current state.
+const pushSnap = (s, newData) => {
+  const snap = { rooms: newData.rooms ?? s.rooms, doors: newData.doors ?? s.doors, wins: newData.wins ?? s.wins };
+  const base = s.history.slice(0, s.historyIdx + 1);
+  const next = [...base, snap].slice(-20);
+  return { history: next, historyIdx: next.length - 1 };
+};
+
 export const store = createStore((set, get) => ({
   tool:       'select',
   roomType:   'living',
@@ -47,8 +58,8 @@ export const store = createStore((set, get) => ({
   doors:      SAMPLE_DOORS,
   wins:       [],
 
-  history:    [],
-  historyIdx: -1,
+  history:    [initialSnap],
+  historyIdx: 0,
   clipboard:  null,
 
   setTool:     t  => set({ tool: t }),
@@ -58,12 +69,8 @@ export const store = createStore((set, get) => ({
 
   snapVal: v => Math.round(v / SNAP) * SNAP,
 
-  pushHistory: () => set(s => {
-    const snap = { rooms: s.rooms, doors: s.doors, wins: s.wins };
-    const base = s.history.slice(0, s.historyIdx + 1);
-    const next = [...base, snap].slice(-20);
-    return { history: next, historyIdx: next.length - 1 };
-  }),
+  // Save current state (used after drag/resize ends in Editor2D)
+  pushHistoryNow: () => set(s => pushSnap(s, { rooms: s.rooms, doors: s.doors, wins: s.wins })),
 
   undo: () => set(s => {
     if (s.historyIdx <= 0) return {};
@@ -100,53 +107,43 @@ export const store = createStore((set, get) => ({
   },
 
   // Rooms
-  addRoom: r => {
-    get().pushHistory();
+  addRoom: r => set(s => {
     const id = uid('room');
-    set(s => ({ rooms: [...s.rooms, { ...r, id }], selId: id }));
-  },
-  updRoom: (id, u) => {
-    get().pushHistory();
-    set(s => ({ rooms: s.rooms.map(r => r.id === id ? { ...r, ...u } : r) }));
-  },
+    const rooms = [...s.rooms, { ...r, id }];
+    return { rooms, selId: id, ...pushSnap(s, { rooms }) };
+  }),
+  // upd* are called during drag — no history push, Editor2D pushes on mouseup
+  updRoom: (id, u) => set(s => ({ rooms: s.rooms.map(r => r.id === id ? { ...r, ...u } : r) })),
 
   // Doors
-  addDoor: d => {
-    get().pushHistory();
+  addDoor: d => set(s => {
     const id = uid('door');
-    set(s => ({ doors: [...s.doors, { ...d, id }], selId: id }));
-  },
-  updDoor: (id, u) => {
-    get().pushHistory();
-    set(s => ({ doors: s.doors.map(d => d.id === id ? { ...d, ...u } : d) }));
-  },
+    const doors = [...s.doors, { ...d, id }];
+    return { doors, selId: id, ...pushSnap(s, { doors }) };
+  }),
+  updDoor: (id, u) => set(s => ({ doors: s.doors.map(d => d.id === id ? { ...d, ...u } : d) })),
 
   // Windows
-  addWin: w => {
-    get().pushHistory();
+  addWin: w => set(s => {
     const id = uid('win');
-    set(s => ({ wins: [...s.wins, { ...w, id }], selId: id }));
-  },
-  updWin: (id, u) => {
-    get().pushHistory();
-    set(s => ({ wins: s.wins.map(w => w.id === id ? { ...w, ...u } : w) }));
-  },
+    const wins = [...s.wins, { ...w, id }];
+    return { wins, selId: id, ...pushSnap(s, { wins }) };
+  }),
+  updWin: (id, u) => set(s => ({ wins: s.wins.map(w => w.id === id ? { ...w, ...u } : w) })),
 
   // Delete
-  delById: id => {
-    get().pushHistory();
-    set(s => ({
-      rooms: s.rooms.filter(r => r.id !== id),
-      doors: s.doors.filter(d => d.id !== id),
-      wins:  s.wins.filter(w => w.id !== id),
-      selId: s.selId === id ? null : s.selId,
-    }));
-  },
+  delById: id => set(s => {
+    const rooms = s.rooms.filter(r => r.id !== id);
+    const doors = s.doors.filter(d => d.id !== id);
+    const wins  = s.wins.filter(w => w.id !== id);
+    const selId = s.selId === id ? null : s.selId;
+    return { rooms, doors, wins, selId, ...pushSnap(s, { rooms, doors, wins }) };
+  }),
   delSel: () => { const { selId, delById } = get(); if (selId) delById(selId); },
-  clearAll: () => {
-    get().pushHistory();
-    set({ rooms: [], doors: [], wins: [], selId: null });
-  },
+  clearAll: () => set(s => {
+    const rooms = [], doors = [], wins = [];
+    return { rooms, doors, wins, selId: null, ...pushSnap(s, { rooms, doors, wins }) };
+  }),
 }));
 
 export const useStore = (selector) => useZustandStore(store, selector);
