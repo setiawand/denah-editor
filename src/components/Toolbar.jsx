@@ -5,6 +5,7 @@ const TOOLS = [
   { id:'room',   icon:'⬜', label:'Ruangan', shortcut:'R' },
   { id:'door',   icon:'◫',  label:'Pintu',   shortcut:'D' },
   { id:'window', icon:'⊞',  label:'Jendela', shortcut:'W' },
+  { id:'stair',  icon:'⊠',  label:'Tangga',  shortcut:'S' },
   { id:'eraser', icon:'✕',  label:'Hapus',   shortcut:'E' },
 ];
 

@@ -2,13 +2,14 @@ import Toolbar from './components/Toolbar';
 import Editor2D from './components/Editor2D';
 import View3D from './components/View3D';
 import PropertiesPanel from './components/PropertiesPanel';
+import FloorTabs from './components/FloorTabs';
 import { useStore, ROOM_TYPES } from './store/useStore';
 
 export default function App() {
-  const view       = useStore(s => s.view);
-  const roomType   = useStore(s => s.roomType);
+  const view        = useStore(s => s.view);
+  const roomType    = useStore(s => s.roomType);
   const setRoomType = useStore(s => s.setRoomType);
-  const setTool    = useStore(s => s.setTool);
+  const setTool     = useStore(s => s.setTool);
 
   const handleRoomTypeClick = (id) => {
     setRoomType(id);
@@ -17,7 +18,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="app-header">
         <div className="logo">
           <span className="logo-mark">⬡</span>
@@ -26,9 +26,9 @@ export default function App() {
         <Toolbar />
       </header>
 
-      {/* Body */}
+      <FloorTabs />
+
       <div className="app-body">
-        {/* Left sidebar: room types */}
         <aside className="sidebar">
           <div className="sb-section">
             <p className="sb-title">Tipe Ruangan</p>
@@ -44,7 +44,7 @@ export default function App() {
           </div>
           <div className="sb-section sb-shortcuts">
             <p className="sb-title">Pintasan</p>
-            {[['V','Pilih'],['R','Ruangan'],['D','Pintu'],['W','Jendela'],['E','Hapus'],['Del','Hapus sel.'],['Esc','Batal']].map(([k,v])=>(
+            {[['V','Pilih'],['R','Ruangan'],['D','Pintu'],['W','Jendela'],['S','Tangga'],['E','Hapus'],['Del','Hapus sel.'],['Esc','Batal']].map(([k,v])=>(
               <div key={k} className="shortcut-row">
                 <kbd>{k}</kbd><span>{v}</span>
               </div>
@@ -52,12 +52,10 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Canvas area */}
         <main className="canvas-wrap">
           {view === '2d' ? <Editor2D /> : <View3D />}
         </main>
 
-        {/* Right: Properties */}
         <aside className="props-sidebar">
           <PropertiesPanel />
         </aside>

@@ -194,3 +194,74 @@ body { background: var(--bg); color: var(--text); }
   font:600 12px 'JetBrains Mono',monospace; cursor:pointer; transition:.15s;
 }
 .vt-btn.active { background:var(--accent); color:#fff; }
+
+/* ── Floor tabs ───────────────────────────────── */
+.floor-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 16px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.floor-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+.floor-tab:hover { background: var(--surf2); color: var(--text); }
+.floor-tab.active {
+  background: var(--surf2);
+  color: var(--text);
+  position: relative;
+}
+.floor-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 1px;
+  background: var(--surf2);
+}
+.floor-tab-label { font-weight: 500; }
+.floor-tab-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+  width: 80px;
+  outline: none;
+  padding: 0;
+}
+.floor-tab-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.floor-tab-close:hover { color: var(--danger); }
+.floor-tab-add {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 20px;
+  padding: 2px 10px 8px;
+  line-height: 1;
+}
+.floor-tab-add:hover { color: var(--accent2); }

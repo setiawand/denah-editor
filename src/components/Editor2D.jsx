@@ -1,14 +1,13 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useStore, GRID, SNAP, MIN_ROOM, DOOR_W, WIN_W, ROOM_TYPES } from '../store/useStore';
+import { useStore, activeFloor, GRID, SNAP, MIN_ROOM, DOOR_W, WIN_W, STAIR_W, ROOM_TYPES } from '../store/useStore';
 
 const HANDLE = 8;
 
-/** Snap door/window to nearest room wall */
 function wallSnap(mx, my, rooms, snapFn, threshold = 32) {
   let best = { x: snapFn(mx), y: snapFn(my), rotation: 0, d: threshold };
   rooms.forEach(r => {
     const checks = [
-      { cond: mx>=r.x && mx<=r.x+r.width,  snapX: snapFn(mx), snapY: r.y,          rot: 0,   dy: Math.abs(my-r.y) },
+      { cond: mx>=r.x && mx<=r.x+r.width,  snapX: snapFn(mx), snapY: r.y,           rot: 0,   dy: Math.abs(my-r.y) },
       { cond: mx>=r.x && mx<=r.x+r.width,  snapX: snapFn(mx), snapY: r.y+r.height,  rot: 180, dy: Math.abs(my-(r.y+r.height)) },
       { cond: my>=r.y && my<=r.y+r.height, snapX: r.x,          snapY: snapFn(my),  rot: 270, dy: Math.abs(mx-r.x) },
       { cond: my>=r.y && my<=r.y+r.height, snapX: r.x+r.width,  snapY: snapFn(my),  rot: 90,  dy: Math.abs(mx-(r.x+r.width)) },
@@ -19,25 +18,25 @@ function wallSnap(mx, my, rooms, snapFn, threshold = 32) {
 }
 
 export default function Editor2D() {
-  const svgRef      = useRef(null);
-  const intRef      = useRef({ type:'idle' }); // interaction state (never triggers re-render)
-  const previewRef  = useRef(null);             // current drawing preview (used in mouseup)
-  const [preview, setPreview] = useState(null); // same, but for rendering
+  const svgRef     = useRef(null);
+  const intRef     = useRef({ type:'idle' });
+  const previewRef = useRef(null);
+  const [preview, setPreview] = useState(null);
 
-  const rooms    = useStore(s => s.rooms);
-  const doors    = useStore(s => s.doors);
-  const wins     = useStore(s => s.wins);
-  const selId    = useStore(s => s.selId);
-  const tool     = useStore(s => s.tool);
+  const rooms  = useStore(s => activeFloor(s)?.rooms  ?? []);
+  const doors  = useStore(s => activeFloor(s)?.doors  ?? []);
+  const wins   = useStore(s => activeFloor(s)?.wins   ?? []);
+  const stairs = useStore(s => activeFloor(s)?.stairs ?? []);
+  const selId  = useStore(s => s.selId);
+  const tool   = useStore(s => s.tool);
   const roomType = useStore(s => s.roomType);
 
-  /** Convert client coords to SVG coords */
   const toSVG = useCallback(e => {
     const r = svgRef.current.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }, []);
 
-  /* ─── Keyboard handlers ─────────────────────────────────── */
+  /* ─── Keyboard ───────────────────────────────────────────── */
   useEffect(() => {
     const onKey = e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
@@ -56,17 +55,23 @@ export default function Editor2D() {
       if (meta && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); s.redo(); }
       if (meta && e.key === 'c') { e.preventDefault(); s.copyEl(); }
       if (meta && e.key === 'v') { e.preventDefault(); s.pasteEl(); }
+
+      if (!meta) {
+        const keys = { v:'select', r:'room', d:'door', w:'window', s:'stair', e:'eraser' };
+        if (keys[e.key.toLowerCase()]) s.setTool(keys[e.key.toLowerCase()]);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  /* ─── MouseDown on SVG background ───────────────────────── */
+  /* ─── MouseDown on background ────────────────────────────── */
   const onBgDown = useCallback(e => {
     e.preventDefault();
     const s = useStore.getState();
     const pt = toSVG(e);
     s.setSel(null);
+    const afRooms = activeFloor(s)?.rooms ?? [];
 
     if (s.tool === 'room') {
       const sx = s.snapVal(pt.x), sy = s.snapVal(pt.y);
@@ -74,11 +79,14 @@ export default function Editor2D() {
       const p = { x:sx, y:sy, width:0, height:0 };
       previewRef.current = p; setPreview(p);
     } else if (s.tool === 'door') {
-      const snap = wallSnap(pt.x, pt.y, s.rooms, s.snapVal);
+      const snap = wallSnap(pt.x, pt.y, afRooms, s.snapVal);
       s.addDoor({ x:snap.x, y:snap.y, rotation:snap.rotation });
     } else if (s.tool === 'window') {
-      const snap = wallSnap(pt.x, pt.y, s.rooms, s.snapVal);
+      const snap = wallSnap(pt.x, pt.y, afRooms, s.snapVal);
       s.addWin({ x:snap.x, y:snap.y, rotation:snap.rotation });
+    } else if (s.tool === 'stair') {
+      const snap = wallSnap(pt.x, pt.y, afRooms, s.snapVal);
+      s.addStair({ x:snap.x, y:snap.y, rotation:snap.rotation });
     }
   }, [toSVG]);
 
@@ -89,7 +97,7 @@ export default function Editor2D() {
     if (s.tool === 'eraser') { s.delById(id); return; }
     if (s.tool !== 'select') return;
     const pt = toSVG(e);
-    const room = s.rooms.find(r => r.id === id);
+    const room = activeFloor(s)?.rooms.find(r => r.id === id);
     if (!room) return;
     s.setSel(id);
     intRef.current = { type:'moving', id, ox: pt.x-room.x, oy: pt.y-room.y };
@@ -101,7 +109,7 @@ export default function Editor2D() {
     if (s.tool === 'eraser') { s.delById(id); return; }
     if (s.tool !== 'select') return;
     const pt = toSVG(e);
-    const door = s.doors.find(d => d.id === id);
+    const door = activeFloor(s)?.doors.find(d => d.id === id);
     if (!door) return;
     s.setSel(id);
     intRef.current = { type:'moving-door', id, ox: pt.x-door.x, oy: pt.y-door.y };
@@ -113,22 +121,34 @@ export default function Editor2D() {
     if (s.tool === 'eraser') { s.delById(id); return; }
     if (s.tool !== 'select') return;
     const pt = toSVG(e);
-    const win = s.wins.find(w => w.id === id);
+    const win = activeFloor(s)?.wins.find(w => w.id === id);
     if (!win) return;
     s.setSel(id);
     intRef.current = { type:'moving-win', id, ox: pt.x-win.x, oy: pt.y-win.y };
   }, [toSVG]);
 
+  const onStairDown = useCallback((e, id) => {
+    e.stopPropagation();
+    const s = useStore.getState();
+    if (s.tool === 'eraser') { s.delById(id); return; }
+    if (s.tool !== 'select') return;
+    const pt = toSVG(e);
+    const stair = activeFloor(s)?.stairs?.find(st => st.id === id);
+    if (!stair) return;
+    s.setSel(id);
+    intRef.current = { type:'moving-stair', id, ox: pt.x-stair.x, oy: pt.y-stair.y };
+  }, [toSVG]);
+
   const onHandleDown = useCallback((e, id, handle) => {
     e.stopPropagation();
     const s = useStore.getState();
-    const room = s.rooms.find(r => r.id === id);
+    const room = activeFloor(s)?.rooms.find(r => r.id === id);
     if (!room) return;
     const pt = toSVG(e);
     intRef.current = { type:'resizing', id, handle, sx:pt.x, sy:pt.y, orig:{...room} };
   }, [toSVG]);
 
-  /* ─── Global MouseMove ───────────────────────────────────── */
+  /* ─── MouseMove ──────────────────────────────────────────── */
   const onMove = useCallback(e => {
     const pt = toSVG(e);
     const it = intRef.current;
@@ -141,16 +161,14 @@ export default function Editor2D() {
         width: Math.abs(cx-it.startX), height: Math.abs(cy-it.startY),
       };
       previewRef.current = p; setPreview({...p});
-
     } else if (it.type === 'moving') {
       s.updRoom(it.id, { x: s.snapVal(pt.x - it.ox), y: s.snapVal(pt.y - it.oy) });
-
     } else if (it.type === 'moving-door') {
       s.updDoor(it.id, { x: s.snapVal(pt.x - it.ox), y: s.snapVal(pt.y - it.oy) });
-
     } else if (it.type === 'moving-win') {
       s.updWin(it.id, { x: s.snapVal(pt.x - it.ox), y: s.snapVal(pt.y - it.oy) });
-
+    } else if (it.type === 'moving-stair') {
+      s.updStair(it.id, { x: s.snapVal(pt.x - it.ox), y: s.snapVal(pt.y - it.oy) });
     } else if (it.type === 'resizing') {
       const dx = pt.x - it.sx, dy = pt.y - it.sy;
       const o = it.orig, M = MIN_ROOM;
@@ -170,7 +188,7 @@ export default function Editor2D() {
     }
   }, [toSVG]);
 
-  /* ─── Global MouseUp ─────────────────────────────────────── */
+  /* ─── MouseUp ────────────────────────────────────────────── */
   const onUp = useCallback(() => {
     const it = intRef.current;
     if (it.type === 'drawing') {
@@ -178,13 +196,13 @@ export default function Editor2D() {
       if (p && p.width >= MIN_ROOM && p.height >= MIN_ROOM) {
         const s = useStore.getState();
         const rt = ROOM_TYPES.find(t => t.id === s.roomType) || ROOM_TYPES[0];
-        const count = s.rooms.filter(r => r.type === s.roomType).length + 1;
+        const af = activeFloor(s);
+        const count = (af?.rooms ?? []).filter(r => r.type === s.roomType).length + 1;
         const name = count > 1 ? `${rt.name} ${count}` : rt.name;
         s.addRoom({ name, type: s.roomType, ...p });
       }
       previewRef.current = null; setPreview(null);
-    } else if (['moving', 'moving-door', 'moving-win', 'resizing'].includes(it.type)) {
-      // Push history once after drag/resize ends (not on every mousemove)
+    } else if (['moving', 'moving-door', 'moving-win', 'moving-stair', 'resizing'].includes(it.type)) {
       useStore.getState().pushHistoryNow();
     }
     intRef.current = { type:'idle' };
@@ -196,7 +214,7 @@ export default function Editor2D() {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [onMove, onUp]);
 
-  const cursor = { select:'default', room:'crosshair', door:'cell', window:'cell', eraser:'cell' }[tool] || 'default';
+  const cursor = { select:'default', room:'crosshair', door:'cell', window:'cell', stair:'cell', eraser:'cell' }[tool] || 'default';
 
   return (
     <div style={{ width:'100%', height:'100%', overflow:'auto', background:'#F8FAFC', position:'relative' }}>
@@ -219,44 +237,35 @@ export default function Editor2D() {
           </filter>
         </defs>
 
-        {/* Grid background */}
         <rect width={1400} height={1000} fill="url(#gg)" onMouseDown={onBgDown} />
 
         {/* Rooms */}
         {rooms.map(room => {
           const rt = ROOM_TYPES.find(t=>t.id===room.type) || ROOM_TYPES[8];
           const sel = selId === room.id;
-          const isMove = tool === 'select' || tool === 'eraser';
           return (
             <g key={room.id} style={{ cursor: tool==='eraser' ? 'cell' : tool==='select' ? 'move' : 'default' }}>
-              {/* Shadow when selected */}
               {sel && <rect x={room.x-2} y={room.y-2} width={room.width+4} height={room.height+4}
                 fill="none" stroke="#3B82F6" strokeWidth={1.5} strokeDasharray="7 3" opacity={0.6} rx={3} pointerEvents="none"/>}
-
               <rect x={room.x} y={room.y} width={room.width} height={room.height}
                 fill={rt.c2d} stroke={sel ? '#3B82F6' : rt.b2d}
                 strokeWidth={sel ? 2 : 1.5} rx={2} filter={sel ? 'url(#shadow)' : ''}
                 onMouseDown={e => onRoomDown(e, room.id)}/>
-
-              {/* Room name */}
               <text x={room.x+room.width/2} y={room.y+room.height/2-8}
                 textAnchor="middle" fontSize={12} fontFamily='"Plus Jakarta Sans",sans-serif'
                 fontWeight={600} fill={rt.b2d} pointerEvents="none">
                 {room.name}
               </text>
-              {/* Dimensions */}
               <text x={room.x+room.width/2} y={room.y+room.height/2+12}
                 textAnchor="middle" fontSize={10} fontFamily='"JetBrains Mono",monospace'
                 fill={rt.b2d} fillOpacity={0.6} pointerEvents="none">
                 {(room.width/GRID).toFixed(1)}m × {(room.height/GRID).toFixed(1)}m
               </text>
-
-              {/* Resize handles (4 corners) */}
               {sel && tool==='select' && [
-                {h:'nw', cx:room.x,              cy:room.y,               cur:'nw-resize'},
-                {h:'ne', cx:room.x+room.width,   cy:room.y,               cur:'ne-resize'},
-                {h:'se', cx:room.x+room.width,   cy:room.y+room.height,   cur:'se-resize'},
-                {h:'sw', cx:room.x,              cy:room.y+room.height,   cur:'sw-resize'},
+                {h:'nw', cx:room.x,            cy:room.y,             cur:'nw-resize'},
+                {h:'ne', cx:room.x+room.width,  cy:room.y,             cur:'ne-resize'},
+                {h:'se', cx:room.x+room.width,  cy:room.y+room.height, cur:'se-resize'},
+                {h:'sw', cx:room.x,            cy:room.y+room.height, cur:'sw-resize'},
               ].map(({h,cx,cy,cur}) => (
                 <rect key={h} x={cx-HANDLE/2} y={cy-HANDLE/2} width={HANDLE} height={HANDLE}
                   fill="white" stroke="#3B82F6" strokeWidth={1.5} rx={1}
@@ -275,11 +284,8 @@ export default function Editor2D() {
               transform={`translate(${door.x},${door.y}) rotate(${door.rotation})`}
               style={{ cursor: tool==='select' ? 'move' : tool==='eraser' ? 'cell' : 'default' }}
               onMouseDown={e => onDoorDown(e, door.id)}>
-              {/* Hinge dot */}
               <circle cx={0} cy={0} r={3.5} fill={sel ? '#3B82F6' : '#334155'}/>
-              {/* Door panel */}
               <line x1={0} y1={0} x2={DW} y2={0} stroke={sel ? '#3B82F6' : '#334155'} strokeWidth={2.5}/>
-              {/* Swing arc */}
               <path d={`M ${DW} 0 A ${DW} ${DW} 0 0 1 0 ${DW}`}
                 fill={sel ? 'rgba(59,130,246,0.12)' : 'rgba(148,163,184,0.15)'}
                 stroke={sel ? '#3B82F6' : '#94A3B8'} strokeWidth={1.5} strokeDasharray="5 3"/>
@@ -301,6 +307,33 @@ export default function Editor2D() {
                 stroke={sel ? '#3B82F6' : '#0EA5E9'} strokeWidth={2} rx={1}/>
               <line x1={WW/3} y1={-6} x2={WW/3} y2={6} stroke={sel ? '#3B82F6' : '#0EA5E9'} strokeWidth={1}/>
               <line x1={WW*2/3} y1={-6} x2={WW*2/3} y2={6} stroke={sel ? '#3B82F6' : '#0EA5E9'} strokeWidth={1}/>
+            </g>
+          );
+        })}
+
+        {/* Stairs */}
+        {stairs.map(stair => {
+          const sel = selId === stair.id;
+          const SW = STAIR_W;
+          return (
+            <g key={stair.id}
+              transform={`translate(${stair.x},${stair.y}) rotate(${stair.rotation}, ${SW/2}, ${SW/2})`}
+              style={{ cursor: tool==='select' ? 'move' : tool==='eraser' ? 'cell' : 'default' }}
+              onMouseDown={e => onStairDown(e, stair.id)}>
+              <rect x={0} y={0} width={SW} height={SW}
+                fill={sel ? 'rgba(59,130,246,0.1)' : 'rgba(203,213,225,0.25)'}
+                stroke={sel ? '#3B82F6' : '#64748B'}
+                strokeWidth={sel ? 2 : 1.5} rx={1}/>
+              {[0.25, 0.5, 0.75].map((t, i) => (
+                <line key={i} x1={SW*t} y1={0} x2={0} y2={SW*t}
+                  stroke={sel ? '#3B82F6' : '#94A3B8'} strokeWidth={1}/>
+              ))}
+              <line x1={SW} y1={0} x2={0} y2={SW}
+                stroke={sel ? '#3B82F6' : '#94A3B8'} strokeWidth={1}/>
+              <text x={SW/2} y={SW/2+5} textAnchor="middle" fontSize={14}
+                fill={sel ? '#3B82F6' : '#334155'} pointerEvents="none">
+                {stair.direction === 'up' ? '↑' : '↓'}
+              </text>
             </g>
           );
         })}
