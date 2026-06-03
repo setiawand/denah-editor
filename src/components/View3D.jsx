@@ -1,16 +1,16 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { useStore, ROOM_TYPES, GRID, WALL_H } from '../store/useStore';
+import { useStore, activeFloor, ROOM_TYPES, GRID, WALL_H } from '../store/useStore';
 
 const SCALE = 1 / GRID;   // pixels → meters
 const WT = 0.13;           // wall thickness (meters)
 
 export default function View3D() {
   const mountRef = useRef(null);
-  const rooms = useStore(s => s.rooms);
-  const doors = useStore(s => s.doors);
-  const wins  = useStore(s => s.wins);
+  const rooms = useStore(s => activeFloor(s)?.rooms ?? []);
+  const doors = useStore(s => activeFloor(s)?.doors ?? []);
+  const wins  = useStore(s => activeFloor(s)?.wins  ?? []);
 
   useEffect(() => {
     const mount = mountRef.current;
