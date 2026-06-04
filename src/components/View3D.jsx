@@ -198,17 +198,17 @@ export default function View3D() {
 
     /* ─── Stairs ───────────────────────────────────────── */
     const stairMat = new THREE.MeshPhongMaterial({ color: 0xCBD5E1, shininess: 10 });
-    const STEPS = 6;
-    const SW = STAIR_W * SCALE;
-    const stepW = SW;
-    const stepD = SW / STEPS;
-    const stepH = WALL_H / STEPS;
+    const STEPS  = 10;
+    const stepH  = 0.18;   // realistic riser height (m)
+    const stepD  = 0.26;   // realistic tread depth (m)
+    const stepW  = STAIR_W * SCALE; // width of staircase
 
     stairs.forEach(stair => {
       const sx = stair.x * SCALE;
       const sz = stair.y * SCALE;
       const rotY = (stair.rotation * Math.PI) / 180;
       const goingUp = stair.direction === 'up';
+      const totalD  = stepD * STEPS;
 
       const group = new THREE.Group();
       group.position.set(sx, 0, sz);
@@ -216,12 +216,11 @@ export default function View3D() {
 
       for (let i = 0; i < STEPS; i++) {
         const step = i + 1;
-        const geo = new THREE.BoxGeometry(stepW, stepH * step, stepD);
+        const geo  = new THREE.BoxGeometry(stepW, stepH * step, stepD);
         const mesh = new THREE.Mesh(geo, stairMat);
-        // Steps go along Z (depth), ascending in Y
         const zOff = goingUp
-          ? stepD * i + stepD / 2          // near→far going up
-          : SW - stepD * i - stepD / 2;    // near→far going down
+          ? stepD * i + stepD / 2
+          : totalD - stepD * i - stepD / 2;
         mesh.position.set(stepW / 2, (stepH * step) / 2, zOff);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
