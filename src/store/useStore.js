@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { useStore as useZustandStore } from 'zustand';
 
 export const GRID = 40;
@@ -61,7 +62,9 @@ const pushSnap = (s, newFloors, newActiveFloorId) => {
   return { history: next, historyIdx: next.length - 1 };
 };
 
-export const store = createStore((set, get) => ({
+export const store = createStore(
+  persist(
+  (set, get) => ({
   tool:          'select',
   roomType:      'living',
   view:          '2d',
@@ -207,7 +210,16 @@ export const store = createStore((set, get) => ({
     const floors = updFloor(s.floors, s.activeFloorId, { rooms:[], doors:[], wins:[], stairs:[] });
     return { floors, selId: null, ...pushSnap(s, floors) };
   }),
-}));
+  }),
+  {
+    name:    'denah-editor-v1',
+    storage: createJSONStorage(() => localStorage),
+    partialize: state => ({
+      floors:        state.floors,
+      activeFloorId: state.activeFloorId,
+    }),
+  }
+));
 
 export const useStore = (selector) => useZustandStore(store, selector);
 useStore.getState = store.getState;
